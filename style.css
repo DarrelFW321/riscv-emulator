@@ -1,0 +1,188 @@
+body {
+    font-family: monospace;
+    background: #0e0e10;
+    color: #e5e5e5;
+    margin: 0;
+    padding: 10px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+h1 { margin: 8px 0 12px 0; }
+
+/* --- Layout --- */
+.main {
+    display: flex;
+    flex: 1;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.panel {
+    background: #18181b;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.left { flex: 1.2; }
+.middle { flex: 1.2; overflow-y: auto; }
+.right { flex: 1; overflow-y: auto; }
+
+/* --- Controls & Inputs --- */
+textarea, input {
+    background: #101013;
+    color: #e5e5e5;
+    border: 1px solid #333;
+    padding: 6px;
+    font-family: monospace;
+    border-radius: 4px;
+}
+
+textarea { width: 100%; height: 240px; resize: vertical; }
+button {
+    margin: 3px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    background: #1e90ff;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+button:hover { background: #0077ee; }
+
+/* --- Tables --- */
+table { border-collapse: collapse; width: 100%; font-family: monospace; }
+td { padding: 4px 8px; border-bottom: 1px solid #333; }
+
+/* --- Console --- */
+#consoleOutput {
+    background: #111;
+    color: #ddd;
+    font-family: monospace;
+    padding: 8px;
+    flex: 1;
+    overflow-y: auto;
+    border-radius: 6px;
+    border: 1px solid #444;
+    white-space: pre-wrap;
+}
+.console-info { color: #4ae; }
+.console-error { color: #f55; }
+.console-warning { color: #ff9933; }
+
+/* --- Current instruction highlight --- */
+#currInstr {
+    color: #80ff80;
+    font-weight: bold;
+    margin-bottom: 10px;
+    transition: background 0.3s;
+}
+
+/* Green highlight for changed memory/registers */
+.changed {
+background-color: #003300;
+color: #80ff80;
+transition: background 0.3s, color 0.3s;
+}
+
+/* Make memory inspector scrollable */
+#memTable {
+display: block;
+max-height: 300px;
+overflow-y: auto;
+width: 100%;
+border-collapse: collapse;
+}
+#memTable th, #memTable td {
+padding: 4px 8px;
+border-bottom: 1px solid #333;
+text-align: left;
+}
+#memTable tr:nth-child(even) {
+background-color: #1a1a1a;
+}
+
+/* --- Horizontal Resizing --- */
+.main {
+display: flex;
+flex: 1;
+overflow: hidden;
+height: calc(100vh - 60px);
+}
+
+.divider {
+width: 5px;
+background: #333;
+cursor: col-resize;
+user-select: none;
+transition: background 0.2s;
+}
+.divider:hover { background: #1e90ff; }
+
+/* --- Vertical Resizing (Console Split) --- */
+.console-container {
+display: flex;
+flex-direction: column;
+height: 100%;
+overflow: hidden;
+}
+
+#consoleOutput {
+flex: 1;
+min-height: 100px;
+overflow-y: auto;
+}
+
+.divider-horizontal {
+height: 5px;
+background: #333;
+cursor: row-resize;
+user-select: none;
+transition: background 0.2s;
+}
+.divider-horizontal:hover { background: #1e90ff; }
+
+/* --- Smooth transitions --- */
+.panel, #consoleOutput, #memTable, textarea {
+transition: width 0.2s ease, height 0.2s ease;
+} 
+
+/* Red flash for memory warnings */
+.warning-flash {
+background-color: #550000 !important;
+color: #ff6666 !important;
+transition: background 0.5s, color 0.5s;
+}
+
+.footer {
+text-align: center;
+font-size: 12px;
+color: #aaa;
+border-top: 1px solid #333;
+padding: 6px 0 4px 0;
+margin-top: 6px;
+background: #0e0e10;
+opacity: 0.9;
+}
+
+.footer a {
+color: #1e90ff;
+text-decoration: none;
+font-weight: 600;
+transition: color 0.2s ease;
+}
+
+.footer a:hover {
+color: #4ea3ff;
+text-decoration: underline;
+}
+
+.footer strong {
+color: #ddd;
+}

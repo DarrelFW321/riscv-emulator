@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RISC-V Emulator Reference</title>
+<style>
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    margin: 40px;
+    line-height: 1.6;
+    background: #fafafa;
+    color: #222;
+  }
+  h1, h2, h3 {
+    color: #2b5fad;
+  }
+  code {
+    background: #eee;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+  table {
+    border-collapse: collapse;
+    margin-top: 10px;
+    width: 100%;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 6px 10px;
+    text-align: left;
+  }
+  th {
+    background: #e5e5e5;
+  }
+</style>
+</head>
+<body>
+
+<h1>RISC-V Emulator Reference</h1>
+<p>This document describes the supported instruction set and runtime behavior for the custom WebAssembly RISC-V emulator by <strong>Darrel Wihandi</strong>.</p>
+
+<hr>
+
+<h2>Memory Model</h2>
+<ul>
+  <li><strong>Addressable range:</strong> 0x0000 – 0x0FFF (4096 bytes = 1024 words)</li>
+  <li><strong>Word size:</strong> 4 bytes</li>
+  <li><strong>Alignment:</strong> All <code>LW</code> / <code>SW</code> operations must be 4-byte aligned.</li>
+  <li><strong>Access outside range:</strong> Triggers a <code>[Warning] Memory access out of bounds</code>.</li>
+</ul>
+
+<hr>
+
+<h2>Registers</h2>
+<ul>
+  <li>32 general-purpose registers (<code>x0</code>–<code>x31</code>)</li>
+  <li><code>x0</code> is hard-wired to 0 and cannot be written.</li>
+  <li><strong>Program Counter (PC):</strong> 32-bit, increments by 4 each instruction unless modified by branch/jump.</li>
+</ul>
+
+<hr>
+
+<h2>Supported Instructions</h2>
+
+<h3>Arithmetic and Logic</h3>
+<table>
+<tr><th>Mnemonic</th><th>Format</th><th>Description</th></tr>
+<tr><td>ADD</td><td>rd, rs1, rs2</td><td>rd = rs1 + rs2</td></tr>
+<tr><td>ADDI</td><td>rd, rs1, imm</td><td>rd = rs1 + imm</td></tr>
+<tr><td>SUB</td><td>rd, rs1, rs2</td><td>rd = rs1 - rs2</td></tr>
+<tr><td>MUL</td><td>rd, rs1, rs2</td><td>rd = rs1 × rs2</td></tr>
+<tr><td>DIV</td><td>rd, rs1, rs2</td><td>rd = (rs2 ≠ 0) ? rs1 / rs2 : 0</td></tr>
+<tr><td>REM</td><td>rd, rs1, rs2</td><td>rd = rs1 % rs2</td></tr>
+<tr><td>AND</td><td>rd, rs1, rs2</td><td>rd = rs1 & rs2</td></tr>
+<tr><td>OR</td><td>rd, rs1, rs2</td><td>rd = rs1 | rs2</td></tr>
+<tr><td>XOR</td><td>rd, rs1, rs2</td><td>rd = rs1 ^ rs2</td></tr>
+<tr><td>SLL</td><td>rd, rs1, rs2</td><td>rd = rs1 << (rs2 & 0x1F)</td></tr>
+<tr><td>SRL</td><td>rd, rs1, rs2</td><td>rd = rs1 >> (rs2 & 0x1F) (logical)</td></tr>
+<tr><td>SRA</td><td>rd, rs1, rs2</td><td>rd = rs1 >> (rs2 & 0x1F) (arithmetic)</td></tr>
+<tr><td>SLT</td><td>rd, rs1, rs2</td><td>rd = (rs1 &lt; rs2) ? 1 : 0</td></tr>
+<tr><td>SLLI</td><td>rd, rs1, imm</td><td>rd = rs1 << (imm & 0x1F)</td></tr>
+<tr><td>SRLI</td><td>rd, rs1, imm</td><td>rd = (unsigned)rs1 >> (imm & 0x1F)</td></tr>
+<tr><td>SRAI</td><td>rd, rs1, imm</td><td>rd = rs1 >> (imm & 0x1F)</td></tr>
+</table>
+
+<h3>Memory</h3>
+<table>
+<tr><th>Mnemonic</th><th>Format</th><th>Description</th></tr>
+<tr><td>LW</td><td>rd, imm(rs1)</td><td>Load word from memory[rs1 + imm]</td></tr>
+<tr><td>SW</td><td>rs2, imm(rs1)</td><td>Store word to memory[rs1 + imm]</td></tr>
+</table>
+
+<h3>Branches & Jumps</h3>
+<table>
+<tr><th>Mnemonic</th><th>Format</th><th>Description</th></tr>
+<tr><td>BEQ</td><td>rs1, rs2, label</td><td>Branch if equal</td></tr>
+<tr><td>BNE</td><td>rs1, rs2, label</td><td>Branch if not equal</td></tr>
+<tr><td>BLT</td><td>rs1, rs2, label</td><td>Branch if less than (signed)</td></tr>
+<tr><td>BGE</td><td>rs1, rs2, label</td><td>Branch if greater/equal (signed)</td></tr>
+<tr><td>BLTU</td><td>rs1, rs2, label</td><td>Branch if less than (unsigned)</td></tr>
+<tr><td>BGEU</td><td>rs1, rs2, label</td><td>Branch if greater/equal (unsigned)</td></tr>
+<tr><td>JAL</td><td>rd, label</td><td>Jump and link (rd = PC + 4, PC = label)</td></tr>
+<tr><td>JALR</td><td>rd, imm(rs1)</td><td>Jump and link register (rd = PC + 4, PC = (rs1+imm)&amp;~1)</td></tr>
+</table>
+
+<h3>System</h3>
+<table>
+<tr><th>Mnemonic</th><th>Format</th><th>Description</th></tr>
+<tr><td>ECALL</td><td>–</td><td>Halts the program (simulated system call).</td></tr>
+</table>
+
+<hr>
+
+<h2>Execution Model</h2>
+<ul>
+  <li>Each instruction advances PC by +4 unless modified by a branch/jump.</li>
+  <li>Instructions are executed sequentially in <code>jsStep()</code> or repeatedly by <code>runSlow()</code>.</li>
+  <li>Labels resolve to PC-relative byte addresses.</li>
+</ul>
+
+<hr>
+
+<h2>Author & Credits</h2>
+<p><strong>Darrel Wihandi</strong><br>
+RISC-V Web Emulator Project<br>
+Built with C++ (Emscripten) + HTML/JS Frontend</p>
+<p>Last Updated: <script>document.write(new Date().toLocaleDateString())</script></p>
+
+</body>
+</html>

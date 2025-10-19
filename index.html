@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RISC-V Emulator</title>
+  <script src="riscv.js"></script>
+  <script type="module" src="index.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>RISC-V Emulator</h1>
+
+  <div class="main">
+    <!-- LEFT PANEL -->
+    <div class="panel left" id="panel-left">
+      <h3>Program</h3>
+      <textarea id="programInput" placeholder="Enter your RISC-V assembly here..."></textarea>
+      <div>
+        <button id="loadBtn">Load</button>
+        <button id="stepBtn">Step</button>
+        <button id="runBtn">Run</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div>
+    <div class="divider" id="divider-left"></div>
+
+    <!-- MIDDLE PANEL -->
+    <div class="panel middle" id="panel-middle">
+      <h3 id="pcDisplay">PC: 0x0</h3>
+      <div id="currInstr">Current Instruction: (none)</div>
+
+      <h3>Registers</h3>
+      <table id="regTable"></table>
+
+      <h3>Memory Inspector</h3>
+      <div>
+        <input id="memSearchInput" type="text" placeholder="Address (e.g. 0x10 or 16)" />
+        <button id="memSearchBtn">Search</button>
+      </div>
+      <table id="memTable"></table>
+    </div>
+    <div class="divider" id="divider-right"></div>
+
+    <!-- RIGHT PANEL -->
+    <div class="panel right" id="panel-right">
+      <h3>Console Output</h3>
+      <div class="console-container">
+        <div id="consoleOutput"></div>
+        <div class="divider-horizontal" id="divider-bottom"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    © 2025 <strong>Darrel Wihandi</strong> • 
+    <strong>SE @ UW</strong> • 
+    <a href="reference.html" target="_blank">RISC-V Emulator Reference</a>
+  </footer>
+</body>
+
+</html>
