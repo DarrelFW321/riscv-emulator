@@ -20,6 +20,13 @@
     padding: 2px 4px;
     border-radius: 4px;
   }
+  pre {
+    background: #f3f3f3;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 4px solid #2b5fad;
+  }
   table {
     border-collapse: collapse;
     margin-top: 10px;
@@ -39,6 +46,35 @@
 
 <h1>RISC-V Emulator Reference</h1>
 <p>This document describes the supported instruction set and runtime behavior for the custom WebAssembly RISC-V emulator by <strong>Darrel Wihandi</strong>.</p>
+
+<hr>
+
+<h2>Quick Start</h2>
+<p>To run your first RISC-V program:</p>
+<ol>
+  <li>Paste the following into the emulator’s <strong>Program Input</strong> area.</li>
+  <li>Click <strong>Load</strong> → <strong>Step</strong> through each instruction or <strong>Run</strong> to execute all.</li>
+  <li>Inspect register values (<code>x1–x5</code>) and memory updates in the side panel.</li>
+</ol>
+
+<pre><code>ADDI x1, x0, 5
+ADDI x2, x0, 10
+JAL x5, sum_func
+SW x3, 3(x1)
+ECALL
+
+sum_func:
+  ADD x3, x1, x2
+  JALR x0, 0(x5)
+</code></pre>
+
+<p><strong>Expected behavior:</strong></p>
+<ul>
+  <li><code>x1 = 5</code>, <code>x2 = 10</code></li>
+  <li>Control jumps to <code>sum_func</code>, computes <code>x3 = x1 + x2 = 15</code></li>
+  <li>Returns via <code>JALR</code> to main, stores <code>x3</code> at memory[<code>x1 + 3</code>]</li>
+  <li><code>ECALL</code> halts execution</li>
+</ul>
 
 <hr>
 
@@ -115,7 +151,7 @@
 <h2>Execution Model</h2>
 <ul>
   <li>Each instruction advances PC by +4 unless modified by a branch/jump.</li>
-  <li>Instructions are executed sequentially in <code>jsStep()</code> or repeatedly by <code>runSlow()</code>.</li>
+  <li>Instructions execute sequentially in <code>jsStep()</code> or in loop by <code>runSlow()</code>.</li>
   <li>Labels resolve to PC-relative byte addresses.</li>
 </ul>
 
