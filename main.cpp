@@ -280,9 +280,11 @@ public:
                << "=" << setw(6) << reg[i]
                << ((i + 1) % 8 == 0 ? "\n" : "  ");
         }
-        ss << "\nMemory[0..32]: ";
-        for (int i = 0; i < 32; i += 4)
-            ss << memory[i / 4] << " ";
+
+        // ✅ Print first 64 *words* (indices 0..63), not skipping
+        ss << "\nMemory[0..63]: ";
+        for (int i = 0; i < 64 && i < (int)memory.size(); i++)
+            ss << memory[i] << " ";
         ss << "\n";
         return ss.str();
     }

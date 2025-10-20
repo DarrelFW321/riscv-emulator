@@ -149,7 +149,7 @@ function refreshUI(reset = false) {
   }
 
   // Memory
-  const memLine = lines.find(l => l.includes("Memory[0..32]"));
+  const memLine = lines.find(l => l.includes("Memory[0..63]")); // match new label
   if (memLine) {
     const vals = memLine.split(":")[1].trim().split(/\s+/).map(Number);
     updateMemTable(vals, reset);
@@ -176,7 +176,8 @@ function buildMemTable() {
   const header = tbl.insertRow();
   header.innerHTML = "<th>Address (Hex / Dec)</th><th>Value</th>";
 
-  for (let i = 0; i < 64; i++) { // show 64 words instead of 16
+  const ROWS = 64; // must match C++ dump
+  for (let i = 0; i < ROWS; i++) {
     const row = tbl.insertRow();
     const addrCell = row.insertCell();
     const valCell = row.insertCell();
@@ -189,25 +190,44 @@ function buildMemTable() {
 // ✅ Green highlight + smooth transition
 function updateMemTable(values, reset) {
   const tbl = document.getElementById("memTable");
-  if (reset || prevMem.length === 0) {
-    prevMem = [...values];
-    for (let i = 1; i < tbl.rows.length; i++) {
+  const totalRows = tbl.rows.length - 1; // minus header
+  const limit = Math.min(values.length, totalRows);
+
+  // (Re)initialize baseline on reset or length change
+  if (reset || prevMem.length !== values.length) {
+    prevMem = values.slice();
+    for (let i = 1; i <= totalRows; i++) {
       const row = tbl.rows[i];
-      row.cells[1].textContent = values[i - 1] ?? 0;
+      if (i <= limit) {
+        row.cells[1].textContent = values[i - 1];
+      } else {
+        row.cells[1].textContent = "—";
+      }
       row.cells[1].className = "";
     }
     return;
   }
 
-  for (let i = 1; i < tbl.rows.length; i++) {
+  // Update only rows we have values for
+  for (let i = 1; i <= limit; i++) {
     const valCell = tbl.rows[i].cells[1];
-    const newVal = values[i - 1] ?? 0;
+    const newVal = values[i - 1];
     const changed = newVal !== prevMem[i - 1];
     valCell.textContent = newVal;
     valCell.className = changed ? "changed" : "";
     prevMem[i - 1] = newVal;
   }
+
+  // For any extra rows in the table, show static placeholder, no highlight
+  for (let i = limit + 1; i <= totalRows; i++) {
+    const valCell = tbl.rows[i].cells[1];
+    if (valCell.textContent !== "—") {
+      valCell.textContent = "—";
+      valCell.className = "";
+    }
+  }
 }
+
 
 
 // --- Panel resizing (horizontal) ---
