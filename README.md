@@ -1,33 +1,32 @@
-# RISC-V Web Emulator
+# 🧠 RISC-V Web Emulator
 
-A lightweight **RISC-V assembly emulator** built with **C++ (Emscripten)** and a simple **HTML/JavaScript UI** — runs entirely in the browser.  
-Created by **Darrel Wihandi** (SE @ University of Waterloo).
-
----
-
-## Live Demo
-
-🔗 **[Open the Emulator on Vercel](https://riscv-emulator.vercel.app/)**  
-*(Runs directly in your browser — no installation required.)*
+A lightweight **RISC-V assembly emulator** built with **C++ (Emscripten)** and a modern **HTML/JavaScript frontend** — runs entirely in your browser.  
+Created by **Darrel Wihandi** *(Software Engineering @ University of Waterloo)*.
 
 ---
 
-## Features
+## 🚀 Live Demo
 
-- **Interactive step-by-step execution**
-  - View registers, PC, and memory state live.
-- **Resizable 3-panel layout**
-  - Code editor, CPU state, and console all flexible.
-- **Syntax highlighting for current instruction**
-- **Memory inspection and misalignment warnings**
-- **Implements a core subset of the RISC-V ISA:**
-  - Arithmetic, logic, branches, jumps, memory, and system ECALL.
+🔗 **[Open Emulator on Vercel](https://riscv-emulator.vercel.app/)**  
+*(Runs natively in your browser — no installation required.)*
 
 ---
 
-## Quick Start
+## ✨ Features
 
-Paste this sample program into the emulator:
+- **Step-by-step or continuous execution**
+  - Inspect registers, memory, and PC updates in real-time.
+- **Visual memory inspector**
+  - Highlights memory writes (byte, half, word) and detects misalignment.
+- **Full RV32I base instruction set coverage**, including:
+  - Arithmetic, logic, branches, jumps, loads/stores, immediate ops, and system ECALL.
+  - Newly added **unsigned comparisons**, **upper immediate**, and **PC-relative** instructions.
+
+---
+
+## 🧩 Quick Start Example
+
+Paste this into the **Program Input** box:
 
 ```asm
 ADDI x1, x0, 5
