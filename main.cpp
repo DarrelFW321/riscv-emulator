@@ -17,6 +17,50 @@ struct Instruction
     vector<string> args;
 };
 
+// ------------------------------------------
+// ABI Register Name Map
+// ------------------------------------------
+static const unordered_map<string, int> ABI_REG_MAP = {
+    // Zero & return
+    {"zero", 0},
+    {"ra", 1},
+    {"sp", 2},
+    {"gp", 3},
+    {"tp", 4},
+
+    // Temporaries
+    {"t0", 5},
+    {"t1", 6},
+    {"t2", 7},
+    {"t3", 28},
+    {"t4", 29},
+    {"t5", 30},
+    {"t6", 31},
+
+    // Saved registers
+    {"s0", 8},
+    {"s1", 9},
+    {"s2", 18},
+    {"s3", 19},
+    {"s4", 20},
+    {"s5", 21},
+    {"s6", 22},
+    {"s7", 23},
+    {"s8", 24},
+    {"s9", 25},
+    {"s10", 26},
+    {"s11", 27},
+
+    // Arguments / return values
+    {"a0", 10},
+    {"a1", 11},
+    {"a2", 12},
+    {"a3", 13},
+    {"a4", 14},
+    {"a5", 15},
+    {"a6", 16},
+    {"a7", 17}};
+
 //-------------------------------------
 // RISC-V Emulator core
 //-------------------------------------
@@ -33,6 +77,9 @@ public:
     {
         reg.assign(32, 0);
         memory.assign(4096, 0);
+        // Initialize stack pointer (x2 = sp) to end of memory
+        reg[2] = memory.size();     // top of 4 KB stack region
+        reg[3] = memory.size() / 2; // gp
     }
 
     //---------------------------------
@@ -111,6 +158,7 @@ public:
                 inst.args.push_back(arg);
             }
 
+            expandPseudo(inst);
             program.push_back(inst);
         }
 
@@ -139,8 +187,23 @@ public:
         // Log every instruction executed
         cerr << "[Exec] " << toString(inst) << " (PC=" << pc << ")\n";
 
+        if (op == "LA")
+        {
+            int rd = regNum(inst.args[0]);
+            string label = inst.args[1];
+            if (!labels.count(label))
+            {
+                cerr << "[Warning] LA label not found: " << label << "\n";
+                pc += 4;
+                return true;
+            }
+            int addr = labels[label];
+            writeReg(rd, addr);
+            pc += 4;
+            return true;
+        }
         // -------- Arithmetic / Logic --------
-        if (op == "ADD")
+        else if (op == "ADD")
             alu3(inst, [](int a, int b)
                  { return a + b; });
         else if (op == "ADDI")
@@ -472,7 +535,32 @@ private:
 
     static int regNum(const string &s)
     {
-        return s[0] == 'x' ? stoi(s.substr(1)) : stoi(s);
+        string name = s;
+        // lowercase everything for consistency
+        for (auto &c : name)
+            c = tolower(c);
+
+        // Handle xN format
+        if (!name.empty() && name[0] == 'x')
+        {
+            try
+            {
+                return stoi(name.substr(1));
+            }
+            catch (...)
+            {
+                cerr << "[Error] Invalid register: " << s << "\n";
+                return 0;
+            }
+        }
+
+        // Handle ABI register name
+        auto it = ABI_REG_MAP.find(name);
+        if (it != ABI_REG_MAP.end())
+            return it->second;
+
+        cerr << "[Warning] Unknown register name: " << s << " → default x0\n";
+        return 0;
     }
 
     static string trim(string s)
@@ -583,6 +671,67 @@ private:
     static int sext16(uint16_t v) { return (int)(int16_t)v; }
     static int zext8(uint8_t v) { return (int)v; }
     static int zext16(uint16_t v) { return (int)v; }
+
+    //--- Pseudo Helpers
+    void expandPseudo(Instruction &inst)
+    {
+        string op = inst.op;
+        for (auto &c : op)
+            c = toupper(c);
+
+        // ---- Load Immediate ----
+        if (op == "LI" && inst.args.size() == 2)
+        {
+            // li rd, imm  ->  addi rd, x0, imm
+            inst.op = "ADDI";
+            inst.args = {inst.args[0], "x0", inst.args[1]};
+        }
+
+        // ---- Move ----
+        else if (op == "MV" && inst.args.size() == 2)
+        {
+            // mv rd, rs -> addi rd, rs, 0
+            inst.op = "ADDI";
+            inst.args = {inst.args[0], inst.args[1], "0"};
+        }
+
+        // ---- Load Address ----
+        else if (op == "LA" && inst.args.size() == 2)
+        {
+            // la rd, label -> handled at runtime (resolve label to address)
+            inst.op = "LA";
+        }
+
+        // ---- Jump ----
+        else if (op == "J" && inst.args.size() == 1)
+        {
+            // j label -> jal x0, label
+            inst.op = "JAL";
+            inst.args = {"x0", inst.args[0]};
+        }
+
+        // ---- Jump Register ----
+        else if (op == "JR" && inst.args.size() == 1)
+        {
+            // jr rs -> jalr x0, 0(rs)
+            inst.op = "JALR";
+            inst.args = {"x0", "0(" + inst.args[0] + ")"};
+        }
+
+        // ---- Return ----
+        else if (op == "RET")
+        {
+            // ret -> jalr x0, 0(x1)
+            inst.op = "JALR";
+            inst.args = {"x0", "0(x1)"};
+        }
+
+        // ---- JALR (canonicalize lowercase etc.)
+        else if (op == "JALR")
+        {
+            inst.op = "JALR";
+        }
+    }
 };
 
 //-------------------------------------

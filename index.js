@@ -11,6 +11,15 @@ let stopRequested = false;
 let isRunning = false;
 let currentRunId = 0;
 
+const ABI_REG_NAMES = [
+  "zero", "ra", "sp", "gp", "tp",  // 0–4
+  "t0", "t1", "t2", "s0", "s1", // 5–9
+  "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", // 10–17
+  "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", // 18–27
+  "t3", "t4", "t5", "t6" // 28–31
+];
+let showAbiNames = false; // toggle flag
+
 
 // --- Console Helpers ---
 function addConsoleLine(text, type = "info") {
@@ -113,12 +122,21 @@ function setupUI() {
 
     addConsoleLine("🔁 CPU Reset & Program Reloaded.", "info");
 
+    // --- Reset register tracking properly ---
     prevRegs = Array(32).fill(0);
     refreshUI(true);
+
+    // After first UI refresh, sync current register snapshot (so SP/GP won't flash)
+    const stateStr = Module.jsDumpState();
+    const lines = stateStr.split("\n");
+    for (const line of lines) {
+      const matches = [...line.matchAll(/x(\d+)=\s*(-?\d+)/g)];
+      for (const m of matches) prevRegs[parseInt(m[1])] = parseInt(m[2]);
+    }
     document.getElementById("currInstr").textContent = "Current Instruction: (none)";
 
     // --- Rebuild PC → line map ---
-    const lines = src.split("\n");
+    lines = src.split("\n");
     pcToLine = [];
     let pc = 0;
     for (let i = 0; i < lines.length; i++) {
@@ -164,6 +182,13 @@ function setupUI() {
   };
 
   buildRegTable();
+
+  document.getElementById("toggleRegNamesBtn").onclick = () => {
+    showAbiNames = !showAbiNames;
+    const btn = document.getElementById("toggleRegNamesBtn");
+    btn.textContent = showAbiNames ? "Show xN" : "Show ABI";
+    refreshUI(true); // refresh table labels immediately
+  };
   buildMemTable();
 }
 
@@ -324,8 +349,9 @@ function refreshUI(reset = false) {
   const regTable = document.getElementById("regTable");
   for (let i = 0; i < 32; i++) {
     const cell = regTable.rows[Math.floor(i / 4)].cells[i % 4];
-    const changed = regs[i] !== prevRegs[i];
-    cell.textContent = `x${i.toString().padStart(2, "0")}: ${regs[i]}`;
+    const changed = !reset && regs[i] !== prevRegs[i];
+    const label = showAbiNames ? ABI_REG_NAMES[i] : `x${i.toString().padStart(2, "0")}`;
+    cell.textContent = `${label}: ${regs[i]}`;
     cell.className = changed ? "changed" : "";
     prevRegs[i] = regs[i];
   }
@@ -356,7 +382,8 @@ function buildRegTable() {
     for (let c = 0; c < 4; c++) {
       const idx = r * 4 + c;
       const cell = row.insertCell();
-      cell.textContent = `x${idx.toString().padStart(2, "0")}: 0`;
+      const label = showAbiNames ? ABI_REG_NAMES[idx] : `x${idx}`;
+      cell.textContent = `${label}: 0`;
     }
   }
 }
