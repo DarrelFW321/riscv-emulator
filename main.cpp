@@ -15,6 +15,7 @@ struct Instruction
 {
     string op;
     vector<string> args;
+    int sourceLine = -1;
 };
 
 // ------------------------------------------
@@ -91,40 +92,31 @@ public:
         labels.clear();
         pc = 0;
 
-        for (auto &rawLine : lines)
+        for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex)
         {
+            string rawLine = lines[lineIndex];
             string line = trim(rawLine);
 
-            // skip empty or comment lines
             if (line.empty() || line[0] == '#')
                 continue;
-
-            // strip inline comments (anything after '#')
             size_t commentPos = line.find('#');
             if (commentPos != string::npos)
                 line = trim(line.substr(0, commentPos));
             if (line.empty())
                 continue;
 
-            // --- Handle one or more inline labels ---
+            // --- Handle labels ---
             while (true)
             {
                 size_t pos = line.find(':');
                 if (pos == string::npos)
                     break;
-
                 string label = trim(line.substr(0, pos));
                 if (!label.empty())
-                {
-                    labels[label] = program.size() * 4; // byte address
-                    cerr << "[Label] " << label << " = 0x" << hex << labels[label] << dec << "\n";
-                }
-
-                // Remove everything up to and including the colon
+                    labels[label] = program.size() * 4;
                 line = (pos + 1 < line.size()) ? line.substr(pos + 1) : "";
                 line = trim(line);
             }
-
             if (line.empty())
                 continue;
 
@@ -132,34 +124,32 @@ public:
             stringstream ss(line);
             Instruction inst;
             ss >> inst.op;
+            inst.sourceLine = (int)lineIndex; // 🟢 assign the source line here
 
-            if (inst.op.empty())
-                continue; // safety
-
-            // Normalize opcode: uppercase for consistency
+            // normalize
             for (auto &ch : inst.op)
                 ch = toupper(ch);
 
-            // Read the remaining arguments
             string argsPart;
             getline(ss, argsPart);
             argsPart = trim(argsPart);
-
-            // Replace commas with spaces (so "x1,x2" and "x1, x2" both work)
             for (char &ch : argsPart)
                 if (ch == ',')
                     ch = ' ';
-
-            // Split arguments safely
             stringstream as(argsPart);
             string arg;
             while (as >> arg)
-            {
                 inst.args.push_back(arg);
-            }
 
-            expandPseudo(inst);
-            program.push_back(inst);
+            // expand pseudo-instructions
+            auto seq = expandPseudo(inst);
+
+            // 🟢 propagate the source line number
+            for (auto &e : seq)
+            {
+                e.sourceLine = inst.sourceLine;
+                program.push_back(e);
+            }
         }
 
         cerr << "[RISC-V] Program loaded: " << program.size()
@@ -185,20 +175,27 @@ public:
         string op = inst.op;
 
         // Log every instruction executed
-        cerr << "[Exec] " << toString(inst) << " (PC=" << pc << ")\n";
+        cerr << "[Exec] " << toString(inst) << " (PC=" << pc << ", Line=" << inst.sourceLine << ")\n";
 
         if (op == "LA")
         {
             int rd = regNum(inst.args[0]);
             string label = inst.args[1];
+
             if (!labels.count(label))
             {
                 cerr << "[Warning] LA label not found: " << label << "\n";
                 pc += 4;
                 return true;
             }
+
             int addr = labels[label];
-            writeReg(rd, addr);
+            int upper = (addr + 0x800) >> 12;
+            int lower = addr & 0xFFF;
+            if (lower & 0x800)
+                lower -= 0x1000; // sign-fix
+
+            writeReg(rd, (upper << 12) + lower); // emulate LUI+ADDI
             pc += 4;
             return true;
         }
@@ -275,6 +272,8 @@ public:
         {
             int rd = regNum(inst.args[0]);
             auto [imm, rs1] = parseMem(inst.args[1]);
+            imm = signExtend12(imm);
+
             int addr = reg[rs1] + imm;
 
             if (op == "LB")
@@ -318,6 +317,8 @@ public:
         {
             int rs2 = regNum(inst.args[0]);
             auto [imm, rs1] = parseMem(inst.args[1]);
+            imm = signExtend12(imm);
+
             int addr = reg[rs1] + imm;
 
             if (op == "SB")
@@ -348,7 +349,7 @@ public:
             string t = inst.args[2];
 
             // compute byte offset (label or immediate)
-            int offset = (labels.count(t) ? labels[t] - pc : stoi(t));
+            int offset = (labels.count(t) ? labels[t] - pc : signExtend12(parseNumber(t)));
 
             bool take = false;
 
@@ -409,6 +410,7 @@ public:
         {
             int rd = regNum(inst.args[0]);
             auto [imm, rs1] = parseMem(inst.args[1]);
+            imm = signExtend12(imm);
             writeReg(rd, pc + 4);
             pc = (reg[rs1] + imm) & ~1;
             cerr << "[RISC-V] JALR → addr=" << pc << "\n";
@@ -490,6 +492,15 @@ public:
     uint8_t *getMemoryData() { return memory.data(); }
     size_t getMemorySize() const { return memory.size(); }
 
+    // For Line Highlights
+    int getSourceLineForPC(int pcValue) const
+    {
+        int idx = pcValue / 4;
+        if (idx < 0 || idx >= (int)program.size())
+            return -1;
+        return program[idx].sourceLine;
+    }
+
 private:
     //---------------------------------
     // Helpers
@@ -514,7 +525,7 @@ private:
     {
         int rd = regNum(ins.args[0]);
         int rs1 = regNum(ins.args[1]);
-        int imm = parseNumber(ins.args[2]);
+        int imm = signExtend12(parseNumber(ins.args[2]));
         writeReg(rd, fn(reg[rs1], imm));
     }
 
@@ -545,7 +556,7 @@ private:
         {
             try
             {
-                return stoi(name.substr(1));
+                return parseNumber(name.substr(1));
             }
             catch (...)
             {
@@ -575,16 +586,37 @@ private:
         if (s.empty())
             return 0;
 
-        // Handle 0x or 0X prefixes
-        if (s.size() > 2 && (s[0] == '0') && (s[1] == 'x' || s[1] == 'X'))
-            return stoi(s, nullptr, 16);
+        auto to32 = [](long long v) -> int
+        {
+            uint32_t u = static_cast<uint32_t>(v); // wrap like RV32
+            return static_cast<int>(u);            // interpret as signed
+        };
 
-        // Handle possible negative numbers
-        if (s[0] == '-' && s.size() > 3 && s[1] == '0' && (s[2] == 'x' || s[2] == 'X'))
-            return -stoi(s.substr(1), nullptr, 16);
+        try
+        {
+            if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+            {
+                long long v = stoll(s, nullptr, 16);
+                return to32(v);
+            }
+            if (s.size() > 3 && s[0] == '-' && s[1] == '0' && (s[2] == 'x' || s[2] == 'X'))
+            {
+                long long v = stoll(s.substr(1), nullptr, 16);
+                return to32(-v);
+            }
+            long long v = stoll(s, nullptr, 10);
+            return to32(v);
+        }
+        catch (...)
+        {
+            cerr << "[Error] Bad immediate: " << s << "\n";
+            return 0;
+        }
+    }
 
-        // Fallback: decimal
-        return stoi(s, nullptr, 10);
+    static inline int signExtend12(int imm)
+    {
+        return (imm << 20) >> 20; // keep lower 12 bits, sign-extend
     }
 
     bool validAddr(int addr) const
@@ -673,64 +705,85 @@ private:
     static int zext16(uint16_t v) { return (int)v; }
 
     //--- Pseudo Helpers
-    void expandPseudo(Instruction &inst)
+    vector<Instruction> expandPseudo(const Instruction &instIn)
     {
+        Instruction inst = instIn;
         string op = inst.op;
         for (auto &c : op)
             c = toupper(c);
 
-        // ---- Load Immediate ----
+        // --- MV rd, rs → ADDI rd, rs, 0 ---
+        if (op == "MV" && inst.args.size() == 2)
+        {
+            Instruction addi{"ADDI", {inst.args[0], inst.args[1], "0"}};
+            addi.sourceLine = inst.sourceLine;
+            return {addi};
+        }
+
+        // --- LI rd, imm ---
         if (op == "LI" && inst.args.size() == 2)
         {
-            // li rd, imm  ->  addi rd, x0, imm
-            inst.op = "ADDI";
-            inst.args = {inst.args[0], "x0", inst.args[1]};
+            string rd = inst.args[0];
+            int imm = parseNumber(inst.args[1]);
+
+            if (imm >= -2048 && imm <= 2047)
+            {
+                Instruction addi{"ADDI", {rd, "x0", to_string(imm)}};
+                addi.sourceLine = inst.sourceLine;
+                return {addi};
+            }
+            else
+            {
+                uint32_t uimm = static_cast<uint32_t>(imm);
+                int upper = static_cast<int>((uimm + 0x800) >> 12);
+                int lower = static_cast<int>(uimm & 0xFFF);
+                if (lower & 0x800)
+                    lower -= 0x1000;
+
+                Instruction lui{"LUI", {rd, to_string(upper)}};
+                Instruction addi{"ADDI", {rd, rd, to_string(lower)}};
+                lui.sourceLine = inst.sourceLine;
+                addi.sourceLine = inst.sourceLine;
+                return {lui, addi};
+            }
         }
 
-        // ---- Move ----
-        else if (op == "MV" && inst.args.size() == 2)
+        // --- LA rd, label ---
+        if (op == "LA" && inst.args.size() == 2)
         {
-            // mv rd, rs -> addi rd, rs, 0
-            inst.op = "ADDI";
-            inst.args = {inst.args[0], inst.args[1], "0"};
+            Instruction la{"LA", {inst.args[0], inst.args[1]}};
+            la.sourceLine = inst.sourceLine;
+            return {la};
         }
 
-        // ---- Load Address ----
-        else if (op == "LA" && inst.args.size() == 2)
+        // --- J label ---
+        if (op == "J" && inst.args.size() == 1)
         {
-            // la rd, label -> handled at runtime (resolve label to address)
-            inst.op = "LA";
+            Instruction jal{"JAL", {"x0", inst.args[0]}};
+            jal.sourceLine = inst.sourceLine;
+            return {jal};
         }
 
-        // ---- Jump ----
-        else if (op == "J" && inst.args.size() == 1)
+        // --- JR rs ---
+        if (op == "JR" && inst.args.size() == 1)
         {
-            // j label -> jal x0, label
-            inst.op = "JAL";
-            inst.args = {"x0", inst.args[0]};
+            Instruction jalr{"JALR", {"x0", "0(" + inst.args[0] + ")"}};
+            jalr.sourceLine = inst.sourceLine;
+            return {jalr};
         }
 
-        // ---- Jump Register ----
-        else if (op == "JR" && inst.args.size() == 1)
+        // --- RET ---
+        if (op == "RET")
         {
-            // jr rs -> jalr x0, 0(rs)
-            inst.op = "JALR";
-            inst.args = {"x0", "0(" + inst.args[0] + ")"};
+            Instruction jalr{"JALR", {"x0", "0(x1)"}};
+            jalr.sourceLine = inst.sourceLine;
+            return {jalr};
         }
 
-        // ---- Return ----
-        else if (op == "RET")
-        {
-            // ret -> jalr x0, 0(x1)
-            inst.op = "JALR";
-            inst.args = {"x0", "0(x1)"};
-        }
-
-        // ---- JALR (canonicalize lowercase etc.)
-        else if (op == "JALR")
-        {
-            inst.op = "JALR";
-        }
+        // --- Default (unchanged) ---
+        Instruction unchanged = instIn;
+        unchanged.sourceLine = inst.sourceLine;
+        return {unchanged};
     }
 };
 
@@ -764,6 +817,7 @@ EMSCRIPTEN_BINDINGS(riscv_bindings)
 
     emscripten::class_<SimpleRISCV>("SimpleRISCV")
         .function("getMemorySize", &SimpleRISCV::getMemorySize)
+        .function("getSourceLineForPC", &SimpleRISCV::getSourceLineForPC)
         .function("getMemoryData",
                   emscripten::optional_override([](SimpleRISCV &self)
                                                 { return reinterpret_cast<uintptr_t>(self.getMemoryData()); }));

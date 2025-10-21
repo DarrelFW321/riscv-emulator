@@ -4,7 +4,6 @@ let Module = null;
 let memView = null;  
 let prevRegs = Array(32).fill(0);
 let prevMem = [];
-let pcToLine = [];
 let lastInspectedAddr = null;
 let prevMemBytes = new Map();
 let stopRequested = false;
@@ -63,17 +62,6 @@ function setupUI() {
     addConsoleLine("📜 Program loaded.", "info");
     prevRegs = Array(32).fill(0);
     refreshUI(true);
-
-    // 🔧 build PC→line map (skip comments and labels)
-    const lines = src.split("\n");
-    pcToLine = [];
-    let pc = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (!trimmed || trimmed.startsWith("#") || trimmed.endsWith(":")) continue;
-      pcToLine.push({ pc, line: i });
-      pc += 4;
-    }
   };
 
   document.getElementById("stepBtn").onclick = () => {
@@ -134,17 +122,6 @@ function setupUI() {
       for (const m of matches) prevRegs[parseInt(m[1])] = parseInt(m[2]);
     }
     document.getElementById("currInstr").textContent = "Current Instruction: (none)";
-
-    // --- Rebuild PC → line map ---
-    const srclines = src.split("\n");
-    pcToLine = [];
-    let pc = 0;
-    for (let i = 0; i < srclines.length; i++) {
-      const trimmed = srclines[i].trim();
-      if (!trimmed || trimmed.startsWith("#") || trimmed.endsWith(":")) continue;
-      pcToLine.push({ pc, line: i });
-      pc += 4;
-    }
   };
 
 
@@ -547,30 +524,31 @@ initModule();
 
 
 function highlightCurrentLine(pc) {
-  const ta = document.getElementById("programInput");
-  const lines = ta.value.split("\n");
-  const match = pcToLine.find(x => x.pc === pc);
-  if (!match) return;
+  if (!Module || !Module.getCpuInstance) return;
 
-  const lineIndex = match.line;
-  let start = 0;
-  for (let i = 0; i < lineIndex; i++) start += lines[i].length + 1;
-  const end = start + lines[lineIndex].length;
+  try {
+    const cpu = Module.getCpuInstance();
+    const lineIndex = cpu.getSourceLineForPC(pc);
+    if (lineIndex < 0) return; // no valid mapping
 
-  // Preserve user focus — only update selection if textarea was active
-  const wasFocused = document.activeElement === ta;
+    const ta = document.getElementById("programInput");
+    const lines = ta.value.split("\n");
 
-  // Update the visible highlight range (selection)
-  ta.setSelectionRange(start, end);
+    // Compute character offsets to select correct line
+    let start = 0;
+    for (let i = 0; i < lineIndex; i++) start += lines[i].length + 1;
+    const end = start + (lines[lineIndex]?.length ?? 0);
 
-  // Only refocus if user had focus already
-  if (wasFocused) {
-    ta.focus();
+    const wasFocused = document.activeElement === ta;
+    ta.setSelectionRange(start, end);
+    if (wasFocused) ta.focus();
+
+    // Smooth scroll so that current line is visible
+    const lineHeight = 18;
+    ta.scrollTop = lineIndex * lineHeight - ta.clientHeight / 3;
+  } catch (err) {
+    console.warn("Highlight failed:", err);
   }
-
-  // Scroll smoothly into view
-  const lineHeight = 18;
-  ta.scrollTop = lineIndex * lineHeight - ta.clientHeight / 3;
 }
 
 
