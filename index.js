@@ -136,11 +136,11 @@ function setupUI() {
     document.getElementById("currInstr").textContent = "Current Instruction: (none)";
 
     // --- Rebuild PC → line map ---
-    lines = src.split("\n");
+    const srclines = src.split("\n");
     pcToLine = [];
     let pc = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
+    for (let i = 0; i < srclines.length; i++) {
+      const trimmed = srclines[i].trim();
       if (!trimmed || trimmed.startsWith("#") || trimmed.endsWith(":")) continue;
       pcToLine.push({ pc, line: i });
       pc += 4;

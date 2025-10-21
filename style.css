@@ -1,22 +1,31 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth; 
+}
+
 body {
     font-family: monospace;
     background: #0e0e10;
     color: #e5e5e5;
     margin: 0;
     padding: 10px;
-    height: 100vh;
     display: flex;
+    min-height: 100vh;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 h1 { margin: 8px 0 12px 0; }
 
 /* --- Layout --- */
 .main {
-    display: flex;
-    flex: 1;
-    gap: 10px;
-    overflow: hidden;
+  flex: 1;               /* fills space above footer */
+  display: flex;
+  flex-direction: row;
+  overflow: auto;
+  scroll-behavior: smooth;
 }
 
 .panel {
@@ -114,12 +123,6 @@ transition: background 0.3s, color 0.3s;
   background-color: #1a1a1a;
 }
 /* --- Horizontal Resizing --- */
-.main {
-display: flex;
-flex: 1;
-overflow: hidden;
-height: calc(100vh - 60px);
-}
 
 .divider {
 width: 5px;
@@ -165,16 +168,21 @@ color: #ff6666 !important;
 transition: background 0.5s, color 0.5s;
 }
 
+
 .footer {
-text-align: center;
-font-size: 12px;
-color: #aaa;
-border-top: 1px solid #333;
-padding: 6px 0 4px 0;
-margin-top: 6px;
-background: #0e0e10;
-opacity: 0.9;
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 5;
+  background: #0e0e10;
+  border-top: 1px solid #333;
+  text-align: center;
+  padding: 8px 0;
+  transition: all 0.25s ease-in-out; 
+  opacity:0.9
 }
+
 
 .footer a {
 color: #1e90ff;
@@ -285,4 +293,218 @@ color: #ddd;
 @keyframes flashfade {
   0% { background-color: #ffe680; }
   100% { background-color: inherit; }
+}
+
+
+/* --- Mobile View --- */
+@media (max-width: 900px) {
+  .main {
+    flex-direction: column;           /* stack panels vertically */
+    height: auto;
+  }
+
+  .divider, .divider-horizontal {
+    display: none;                   /* hide manual resize dividers */
+  }
+
+  .panel {
+    width: 100%;
+    min-height: auto;
+    padding: 8px;
+  }
+
+  textarea#programInput {
+    width: 100%;
+    min-height: 300px;
+    font-size: 14px;
+  }
+
+  button {
+    flex: 1;
+    margin: 4px 2px;
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  #regTable, #memTable {
+    font-size: 13px;
+    overflow-x: auto;
+    display: block;
+    width: 100%;
+  }
+
+  #memInspectResult {
+    overflow-x: auto;
+    font-size: 13px;
+  }
+
+  .footer {
+    font-size: 12px;
+    text-align: center;
+    flex-wrap: wrap;
+    line-height: 1.5em;
+  }
+}
+
+@media (max-width: 900px) {
+  html, body {
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body {
+    padding: 0; /* remove global padding to avoid extra scrollbars */
+  }
+
+  .main {
+    flex-direction: column;
+    height: auto;
+    overflow: visible; /* ✅ allow panels to flow naturally */
+      .main {
+    padding-bottom: 60px; /* add breathing room so footer doesn’t hide content */
+  }
+  }
+
+  .panel {
+    width: 100%;
+    min-height: auto;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  textarea#programInput {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;        /* small spacing between stacked panels */
+    height: auto !important;    /* override any inherited flex height */
+    flex: 0 0 auto !important;  /* don't stretch to fill */
+    display: block;             /* natural flow height */
+  }
+
+  button {
+    flex: 1;
+    margin: 4px 2px;
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  #regTable, #memTable {
+    font-size: 13px;
+    margin-top: 4px;
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    
+  }
+
+  #memInspectResult {
+    overflow-x: auto;
+    font-size: 13px;
+  }
+
+  /* ✅ Fix footer on mobile */
+  .footer {
+    position: fixed;          /* make footer always visible */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    font-size: 12px;
+    text-align: center;
+    background: #0e0e10;
+    border-top: 1px solid #333;
+    padding: 10px 4px;
+    line-height: 1.4em;
+    opacity: 0.95;
+    z-index: 10;
+  }
+
+  #toggleRegNamesBtn {
+    font-size: 12px;
+    padding: 4px 8px;
+    margin-left: 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    max-width: 90px;
+    white-space: nowrap;   /* prevents wrapping to two lines */
+  }
+
+  /* Reduce vertical padding/margins in panels */
+  .panel h3 {
+    margin-top: 6px;
+    margin-bottom: 6px;
+    font-size: 14px;
+  } 
+
+  /* Make console output area shorter on mobile */
+  #consoleOutput {
+    min-height: 140px;      /* was 240+ */
+    max-height: 220px;      /* cap height */
+    font-size: 13px;
+    padding: 6px;
+  }
+
+  /* Compact console container */
+  .console-container {
+    flex: 0 0 auto;
+    max-height: 300px;
+  }
+
+
+
+  /* Remove dividers for small screens */
+  .divider, .divider-horizontal {
+    display: none;
+  }
+
+  /* Make text area height flexible but not huge */
+  #panel-left textarea#programInput {
+    min-height: 260px;         /* taller for comfort typing */
+    max-height: 360px;
+    margin-bottom: 8px;        /* small gap before buttons */
+    display: block;
+  }
+
+  #panel-left {
+  margin-bottom: 0;          /* remove extra gap between panels */
+  padding-bottom: 6px;       /* keep small breathing space */
+  height: auto !important;   /* don't stretch */
+  flex: 0 0 auto !important;
+}
+
+/* Button area spacing under textarea */
+#panel-left button {
+  margin-top: 4px;
+  margin-bottom: 0;          /* ✅ remove empty space below buttons */
+}
+
+/* Remove any large gaps before the next (middle) panel */
+#panel-left + .panel {
+  margin-top: 4px;           /* just a subtle visual divider */
+}
+
+/* Compact console section */
+#panel-right {
+  height: auto !important;
+  flex: 0 0 auto !important;
+  max-height: none;
+}
+
+/* Slightly reduce margins to tighten spacing visually */
+h3 {
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+}
+
+
+#consoleOutput, textarea {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 901px) {
+  .footer {
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+  }
 }
