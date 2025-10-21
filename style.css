@@ -35,7 +35,7 @@ h1 { margin: 8px 0 12px 0; }
     padding: 10px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible; 
 }
 
 .left { flex: 1.2; }
@@ -517,10 +517,16 @@ h3 {
   }
 }
 
-.main, .panel {
-  overflow: visible;       
+#panel-left button {
+  position: relative;
+  z-index: 5;             /* ✅ ensures they're always clickable */
 }
 
+.middle,
+.right {
+  overflow-y: auto;       /* ✅ keep their intended scroll behavior */
+  overflow-x: hidden;
+}
 .footer {
   background: rgba(30, 144, 255, 0.1); /* see the clickable overlay */
 }
