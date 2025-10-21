@@ -7,7 +7,7 @@ Created by **Darrel Wihandi** *(Software Engineering @ University of Waterloo)*.
 
 ## 🚀 Live Demo
 
-🔗 **[Open Emulator on Vercel](https://riscv-emulator.vercel.app/)**  
+🔗 **[Open Emulator on Vercel](https://riscv-emulator-beta.vercel.app/)**  
 *(Runs natively in your browser — no installation required.)*
 
 ---
