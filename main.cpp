@@ -24,7 +24,7 @@ class SimpleRISCV
 {
 public:
     vector<int> reg;
-    vector<int> memory; // 1024 words (4 KB)
+    vector<uint8_t> memory; // byte-addressable memory (e.g., 4 KiB)
     unordered_map<string, int> labels;
     vector<Instruction> program;
     int pc = 0;
@@ -32,7 +32,7 @@ public:
     SimpleRISCV()
     {
         reg.assign(32, 0);
-        memory.assign(1024, 0);
+        memory.assign(4096, 0);
     }
 
     //---------------------------------
@@ -44,36 +44,78 @@ public:
         labels.clear();
         pc = 0;
 
-        for (auto &raw : lines)
+        for (auto &rawLine : lines)
         {
-            string line = trim(raw);
+            string line = trim(rawLine);
+
+            // skip empty or comment lines
             if (line.empty() || line[0] == '#')
                 continue;
 
-            // Label definition
-            if (line.find(':') != string::npos)
-            {
-                string label = line.substr(0, line.find(':'));
-                labels[label] = program.size() * 4; // byte address
+            // strip inline comments (anything after '#')
+            size_t commentPos = line.find('#');
+            if (commentPos != string::npos)
+                line = trim(line.substr(0, commentPos));
+            if (line.empty())
                 continue;
+
+            // --- Handle one or more inline labels ---
+            while (true)
+            {
+                size_t pos = line.find(':');
+                if (pos == string::npos)
+                    break;
+
+                string label = trim(line.substr(0, pos));
+                if (!label.empty())
+                {
+                    labels[label] = program.size() * 4; // byte address
+                    cerr << "[Label] " << label << " = 0x" << hex << labels[label] << dec << "\n";
+                }
+
+                // Remove everything up to and including the colon
+                line = (pos + 1 < line.size()) ? line.substr(pos + 1) : "";
+                line = trim(line);
             }
 
-            // Parse instruction
+            if (line.empty())
+                continue;
+
+            // --- Parse instruction ---
             stringstream ss(line);
             Instruction inst;
             ss >> inst.op;
+
+            if (inst.op.empty())
+                continue; // safety
+
+            // Normalize opcode: uppercase for consistency
+            for (auto &ch : inst.op)
+                ch = toupper(ch);
+
+            // Read the remaining arguments
+            string argsPart;
+            getline(ss, argsPart);
+            argsPart = trim(argsPart);
+
+            // Replace commas with spaces (so "x1,x2" and "x1, x2" both work)
+            for (char &ch : argsPart)
+                if (ch == ',')
+                    ch = ' ';
+
+            // Split arguments safely
+            stringstream as(argsPart);
             string arg;
-            while (ss >> arg)
+            while (as >> arg)
             {
-                if (arg[0] == '#')
-                    break; // stop reading on comment
-                if (arg.back() == ',')
-                    arg.pop_back();
                 inst.args.push_back(arg);
             }
+
             program.push_back(inst);
         }
-        cerr << "[RISC-V] Program loaded: " << program.size() << " instructions.\n";
+
+        cerr << "[RISC-V] Program loaded: " << program.size()
+             << " instructions, " << labels.size() << " labels.\n";
     }
 
     //---------------------------------
@@ -146,42 +188,93 @@ public:
         else if (op == "SRAI")
             aluI(inst, [](int a, int shamt)
                  { return a >> (shamt & 0x1F); });
+        else if (op == "SLTU")
+            alu3(inst, [](unsigned a, unsigned b)
+                 { return a < b ? 1 : 0; });
+        else if (op == "SLTI")
+            aluI(inst, [](int a, int b)
+                 { return a < b ? 1 : 0; });
+        else if (op == "SLTIU")
+            aluI(inst, [](unsigned a, unsigned b)
+                 { return a < b ? 1 : 0; });
+        else if (op == "XORI")
+            aluI(inst, [](int a, int b)
+                 { return a ^ b; });
+        else if (op == "ORI")
+            aluI(inst, [](int a, int b)
+                 { return a | b; });
+        else if (op == "ANDI")
+            aluI(inst, [](int a, int b)
+                 { return a & b; });
 
         // -------- Memory --------
-        else if (op == "LW")
+        else if (op == "LB" || op == "LBU" || op == "LH" || op == "LHU" || op == "LW")
         {
             int rd = regNum(inst.args[0]);
             auto [imm, rs1] = parseMem(inst.args[1]);
             int addr = reg[rs1] + imm;
-            if (addr % 4 != 0)
+
+            if (op == "LB")
             {
-                cerr << "[Warning] Misaligned LW at address 0x" << hex << addr << dec << "\n";
-                return false;
+                // byte load: no alignment
+                if (!validAddrByte(addr))
+                    return false;
+                int v = sext8(load8(addr));
+                writeReg(rd, v);
             }
-            if (!validAddr(addr))
+            else if (op == "LBU")
             {
-                return false;
+                if (!validAddrByte(addr))
+                    return false;
+                int v = zext8(load8(addr));
+                writeReg(rd, v);
             }
-            int idx = addr / 4;
-            writeReg(rd, memory[idx]);
+            else if (op == "LH")
+            {
+                if (!checkAligned(addr, 2, "LH") || !validAddrByte(addr + 1))
+                    return false;
+                int v = sext16(load16(addr));
+                writeReg(rd, v);
+            }
+            else if (op == "LHU")
+            {
+                if (!checkAligned(addr, 2, "LHU") || !validAddrByte(addr + 1))
+                    return false;
+                int v = zext16(load16(addr));
+                writeReg(rd, v);
+            }
+            else
+            { // LW
+                if (!checkAligned(addr, 4, "LW") || !validAddrByte(addr + 3))
+                    return false;
+                int v = (int)load32(addr);
+                writeReg(rd, v);
+            }
         }
-        else if (op == "SW")
+        else if (op == "SB" || op == "SH" || op == "SW")
         {
             int rs2 = regNum(inst.args[0]);
             auto [imm, rs1] = parseMem(inst.args[1]);
             int addr = reg[rs1] + imm;
-            if (addr % 4 != 0)
-            {
-                cerr << "[Warning] Misaligned SW at address 0x" << hex << addr << dec << "\n";
-                return false;
-            }
-            if (!validAddr(addr))
-            {
-                return false;
-            }
 
-            int idx = addr / 4;
-            memory[idx] = reg[rs2];
+            if (op == "SB")
+            {
+                if (!validAddrByte(addr))
+                    return false;
+                store8(addr, (uint8_t)(reg[rs2] & 0xFF));
+            }
+            else if (op == "SH")
+            {
+                if (!checkAligned(addr, 2, "SH") || !validAddrByte(addr + 1))
+                    return false;
+                store16(addr, (uint16_t)(reg[rs2] & 0xFFFF));
+            }
+            else
+            { // SW
+                if (!checkAligned(addr, 4, "SW") || !validAddrByte(addr + 3))
+                    return false;
+                store32(addr, (uint32_t)reg[rs2]);
+            }
         }
 
         // -------- Branch / Jump --------
@@ -226,7 +319,26 @@ public:
             int rd = regNum(inst.args[0]);
             string label = inst.args[1];
             writeReg(rd, pc + 4);
-            pc = labels[label];
+
+            if (labels.count(label))
+            {
+                pc = labels[label];
+            }
+            else
+            {
+                // Allow numeric immediate jumps (e.g., offsets)
+                try
+                {
+                    int offset = parseNumber(label);
+                    pc += offset;
+                }
+                catch (...)
+                {
+                    cerr << "[Warning] JAL target not found: " << label << "\n";
+                    pc += 4;
+                }
+            }
+
             cerr << "[RISC-V] JAL → " << label << " (PC=" << pc << ")\n";
             return true;
         }
@@ -238,6 +350,18 @@ public:
             pc = (reg[rs1] + imm) & ~1;
             cerr << "[RISC-V] JALR → addr=" << pc << "\n";
             return true;
+        }
+        else if (op == "LUI")
+        {
+            int rd = regNum(inst.args[0]);
+            int imm = parseNumber(inst.args[1]);
+            writeReg(rd, imm << 12);
+        }
+        else if (op == "AUIPC")
+        {
+            int rd = regNum(inst.args[0]);
+            int imm = parseNumber(inst.args[1]);
+            writeReg(rd, pc + (imm << 12));
         }
         else if (op == "ECALL")
         {
@@ -277,14 +401,22 @@ public:
         for (int i = 0; i < 32; i++)
         {
             ss << "x" << setfill('0') << setw(2) << i << setfill(' ')
-               << "=" << setw(6) << reg[i]
+               << "=" << setw(11) << reg[i]
                << ((i + 1) % 8 == 0 ? "\n" : "  ");
         }
 
-        // ✅ Print first 64 *words* (indices 0..63), not skipping
-        ss << "\nMemory[0..63]: ";
-        for (int i = 0; i < 64 && i < (int)memory.size(); i++)
-            ss << memory[i] << " ";
+        // Show first 64 words (256 bytes), reconstructed little-endian
+        ss << "\nMemory[words 0..63]: ";
+        int maxWords = min(64, (int)memory.size() / 4);
+        for (int w = 0; w < maxWords; ++w)
+        {
+            int addr = w * 4;
+            uint32_t val = (uint32_t)(memory[addr] |
+                                      (memory[addr + 1] << 8) |
+                                      (memory[addr + 2] << 16) |
+                                      (memory[addr + 3] << 24));
+            ss << dec << val << "(" << hex << showbase << val << noshowbase << dec << ") ";
+        }
         ss << "\n";
         return ss.str();
     }
@@ -292,15 +424,8 @@ public:
     //---------------------------------
     // Read memory (for search)
     //---------------------------------
-    int readMemory(int addr) const
-    {
-        if (addr % 4 != 0)
-            return 0;
-        int idx = addr / 4;
-        if (idx < 0 || idx >= (int)memory.size())
-            return 0;
-        return memory[idx];
-    }
+    uint8_t *getMemoryData() { return memory.data(); }
+    size_t getMemorySize() const { return memory.size(); }
 
 private:
     //---------------------------------
@@ -385,6 +510,79 @@ private:
         }
         return true;
     }
+
+    // ---- Address checks ----
+    bool validAddrByte(int addr) const
+    {
+        if (addr < 0 || addr >= (int)memory.size())
+        {
+            cerr << "[Warning] Memory access OOB at 0x" << hex << addr << dec
+                 << " (valid 0.." << (int)memory.size() - 1 << ")\n";
+            return false;
+        }
+        return true;
+    }
+    bool checkAligned(int addr, int align, const char *what) const
+    {
+        if (addr % align != 0)
+        {
+            cerr << "[Warning] Misaligned " << what << " at 0x"
+                 << hex << addr << dec << " (align " << align << ")\n";
+            return false;
+        }
+        return true;
+    }
+
+    // ---- Little-endian loads ----
+    uint8_t load8(int addr) const
+    {
+        if (!validAddrByte(addr))
+            return 0;
+        return memory[addr];
+    }
+    uint16_t load16(int addr) const
+    {
+        if (!validAddrByte(addr) || !validAddrByte(addr + 1))
+            return 0;
+        // little-endian
+        return (uint16_t)(memory[addr] | (memory[addr + 1] << 8));
+    }
+    uint32_t load32(int addr) const
+    {
+        if (!validAddrByte(addr) || !validAddrByte(addr + 3))
+            return 0;
+        return (uint32_t)(memory[addr] | (memory[addr + 1] << 8) | (memory[addr + 2] << 16) | (memory[addr + 3] << 24));
+    }
+
+    // ---- Little-endian stores ----
+    void store8(int addr, uint8_t v)
+    {
+        if (!validAddrByte(addr))
+            return;
+        memory[addr] = v;
+    }
+    void store16(int addr, uint16_t v)
+    {
+        if (!validAddrByte(addr) || !validAddrByte(addr + 1))
+            return;
+        memory[addr] = (uint8_t)(v & 0xFF);
+        memory[addr + 1] = (uint8_t)((v >> 8) & 0xFF);
+    }
+    void store32(int addr, uint32_t v)
+    {
+        if (!validAddrByte(addr) || !validAddrByte(addr + 3))
+            return;
+        memory[addr] = (uint8_t)(v & 0xFF);
+        memory[addr + 1] = (uint8_t)((v >> 8) & 0xFF);
+        memory[addr + 2] = (uint8_t)((v >> 16) & 0xFF);
+        memory[addr + 3] = (uint8_t)((v >> 24) & 0xFF);
+    }
+
+    // ---- Sign/zero extension helpers ----
+    static int sext8(uint8_t v) { return (int)(int8_t)v; }
+    static int sext16(uint16_t v) { return (int)(int16_t)v; }
+    static int zext8(uint8_t v) { return (int)v; }
+    static int zext16(uint16_t v) { return (int)v; }
 };
 
 //-------------------------------------
@@ -405,12 +603,19 @@ void jsLoadProgram(string src)
 
 bool jsStep() { return cpu.step(); }
 string jsDumpState() { return cpu.dumpState(); }
-int jsReadMemory(int addr) { return cpu.readMemory(addr); }
+
+SimpleRISCV *getCpuInstance() { return &cpu; }
 
 EMSCRIPTEN_BINDINGS(riscv_bindings)
 {
     emscripten::function("jsLoadProgram", &jsLoadProgram);
     emscripten::function("jsStep", &jsStep);
     emscripten::function("jsDumpState", &jsDumpState);
-    emscripten::function("jsReadMemory", &jsReadMemory);
+    emscripten::function("getCpuInstance", &getCpuInstance, emscripten::allow_raw_pointers());
+
+    emscripten::class_<SimpleRISCV>("SimpleRISCV")
+        .function("getMemorySize", &SimpleRISCV::getMemorySize)
+        .function("getMemoryData",
+                  emscripten::optional_override([](SimpleRISCV &self)
+                                                { return reinterpret_cast<uintptr_t>(self.getMemoryData()); }));
 }
