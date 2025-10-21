@@ -534,8 +534,7 @@ async function initModule() {
     const btn = document.getElementById(id);
     if (!btn) return;
     // Prevent buttons from stealing focus on click/touch
-    btn.addEventListener("pointerdown", e => e.preventDefault());
-    btn.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
+    btn.addEventListener("mousedown", e => e.preventDefault()); 
   });
   setupResizablePanels();
   setupVerticalResize();

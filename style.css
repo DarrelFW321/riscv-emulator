@@ -527,6 +527,3 @@ h3 {
   overflow-y: auto;       /* ✅ keep their intended scroll behavior */
   overflow-x: hidden;
 }
-.footer {
-  background: rgba(30, 144, 255, 0.1); /* see the clickable overlay */
-}
