@@ -114,15 +114,28 @@ sum_func:
 <h2>Pseudo-Instructions</h2>
 <p>The emulator expands several pseudo-instructions automatically during load:</p>
 <table>
-<tr><th>Pseudo</th><th>Equivalent Expansion</th></tr>
-<tr><td><code>LI rd, imm</code></td><td><code>ADDI rd, x0, imm</code></td></tr>
+<tr><th>Pseudo</th><th>Equivalent Expansion / Behavior</th></tr>
+<tr>
+  <td><code>LI rd, imm</code></td>
+  <td>
+    <ul style="margin:0;padding-left:18px;">
+      <li>If <code>−2048 ≤ imm ≤ 2047</code>: <code>ADDI rd, x0, imm</code></li>
+      <li>Otherwise: <code>LUI rd, upper(imm)</code> + <code>ADDI rd, rd, lower(imm)</code></li>
+    </ul>
+  </td>
+</tr>
 <tr><td><code>MV rd, rs</code></td><td><code>ADDI rd, rs, 0</code></td></tr>
 <tr><td><code>J label</code></td><td><code>JAL x0, label</code></td></tr>
 <tr><td><code>JR rs</code></td><td><code>JALR x0, 0(rs)</code></td></tr>
-<tr><td><code>RET</code></td><td><code>JALR x0, 0(x1)</code></td></tr>
-<tr><td><code>LA rd, label</code></td><td>Resolves label to memory address at runtime</td></tr>
+<tr><td><code>RET</code></td><td><code>JALR x0, 0(x1)</code> (return to caller)</td></tr>
+<tr>
+  <td><code>LA rd, label</code></td>
+  <td>
+    Computes the address of <code>label</code> at runtime using
+    <code>LUI + ADDI</code> with correct sign-extension of the lower 12-bit offset.
+  </td>
+</tr>
 </table>
-
 <hr>
 
 <h2>Supported Instructions</h2>
