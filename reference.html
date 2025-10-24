@@ -5,47 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RISC-V Emulator Reference</title>
 <style>
+  :root {
+    --bg: #0f1116;
+    --text: #e0e0e0;
+    --accent: #4fa3ff;
+    --muted: #a8a8a8;
+    --code-bg: #1b1e26;
+    --pre-bg: #181a22;
+    --table-border: #2a2d37;
+    --table-header: #222532;
+    --link: #66b3ff;
+  }
+
   body {
     font-family: 'Segoe UI', sans-serif;
     margin: 40px;
     line-height: 1.6;
-    background: #fafafa;
-    color: #222;
+    background: var(--bg);
+    color: var(--text);
   }
+
   h1, h2, h3 {
-    color: #2b5fad;
+    color: var(--accent);
   }
+
+  a {
+    color: var(--link);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+
   code {
-    background: #eee;
+    background: var(--code-bg);
     padding: 2px 4px;
     border-radius: 4px;
+    color: #a0d7ff;
   }
+
   pre {
-    background: #f3f3f3;
+    background: var(--pre-bg);
     padding: 12px;
     border-radius: 6px;
     overflow-x: auto;
-    border-left: 4px solid #2b5fad;
+    border-left: 4px solid var(--accent);
+    color: #d6eaff;
   }
+
+  hr {
+    border: none;
+    border-top: 1px solid #2f3544;
+    margin: 30px 0;
+  }
+
   table {
     border-collapse: collapse;
     margin-top: 10px;
     width: 100%;
   }
+
   th, td {
-    border: 1px solid #ccc;
+    border: 1px solid var(--table-border);
     padding: 6px 10px;
     text-align: left;
   }
+
   th {
-    background: #e5e5e5;
+    background: var(--table-header);
+    color: var(--accent);
+  }
+
+  td {
+    color: var(--text);
+  }
+
+  ul, ol {
+    margin-left: 20px;
+  }
+
+  li {
+    margin-bottom: 6px;
   }
 </style>
 </head>
 <body>
 
 <h1>RISC-V Emulator Reference</h1>
-<p>This document describes the supported instruction set and runtime behavior for the custom WebAssembly RISC-V emulator by <strong>Darrel Wihandi</strong>.</p>
+<p>This document describes the supported instruction set and runtime behavior for the RISC-V emulator.</p>
 
 <hr>
 
@@ -82,37 +129,36 @@ sum_func:
   <li><strong>Word Size:</strong> 4 bytes</li>
   <li><strong>Alignment:</strong> <code>LH/LHU</code> → 2-byte aligned; <code>LW/SW</code> → 4-byte aligned.</li>
   <li><strong>Out-of-Range:</strong> Accesses beyond 0x0FFF show <code>[Warning] Memory access out of bounds</code>.</li>
-  <li><strong>Stack Pointer (sp):</strong> Initialized to the <em>end of memory</em> (0x0FFC). The stack grows downward from this region.</li>
+  <li><strong>Stack Pointer (sp):</strong> Initialized to <em>end of memory</em> (0x0FFC). Stack grows downward.</li>
 </ul>
 
 <hr>
 
 <h2>Registers</h2>
 <ul>
-  <li>32 general-purpose 32-bit registers (<code>x0</code>–<code>x31</code>)</li>
+  <li>32 general-purpose 32-bit registers (<code>x0</code>–<code>x31</code>).</li>
   <li><code>x0</code> is hard-wired to 0 and cannot be written.</li>
-  <li><strong>Program Counter (PC):</strong> 32-bit; increments by +4 unless modified by a branch/jump.</li>
-  <li><strong>ABI Aliases:</strong> The emulator fully supports standard ABI register names:</li>
+  <li><strong>Program Counter (PC):</strong> 32-bit; increments by +4 unless modified by branch/jump.</li>
+  <li><strong>ABI Aliases:</strong> Standard ABI register names are supported.</li>
 </ul>
 
 <table>
 <tr><th>ABI Name</th><th>x#</th><th>Description</th></tr>
 <tr><td>zero</td><td>x0</td><td>Constant zero</td></tr>
 <tr><td>ra</td><td>x1</td><td>Return address</td></tr>
-<tr><td>sp</td><td>x2</td><td>Stack pointer (initialized to 0x0FFC)</td></tr>
-<tr><td>gp</td><td>x3</td><td>Global pointer (initialized to 0x0800)</td></tr>
+<tr><td>sp</td><td>x2</td><td>Stack pointer (0x0FFC)</td></tr>
+<tr><td>gp</td><td>x3</td><td>Global pointer (0x0800)</td></tr>
 <tr><td>tp</td><td>x4</td><td>Thread pointer</td></tr>
 <tr><td>t0–t6</td><td>x5–x7, x28–x31</td><td>Temporaries</td></tr>
 <tr><td>s0–s11</td><td>x8–x9, x18–x27</td><td>Saved registers</td></tr>
 <tr><td>a0–a7</td><td>x10–x17</td><td>Function arguments / return values</td></tr>
 </table>
 
-<p>Use either numeric (<code>x5</code>) or ABI (<code>t0</code>) notation — both are supported interchangeably in this emulator.</p>
+<p>Use either numeric (<code>x5</code>) or ABI (<code>t0</code>) notation — both are supported interchangeably.</p>
 
 <hr>
 
 <h2>Pseudo-Instructions</h2>
-<p>The emulator expands several pseudo-instructions automatically during load:</p>
 <table>
 <tr><th>Pseudo</th><th>Equivalent Expansion / Behavior</th></tr>
 <tr>
@@ -130,34 +176,29 @@ sum_func:
 <tr><td><code>RET</code></td><td><code>JALR x0, 0(x1)</code> (return to caller)</td></tr>
 <tr>
   <td><code>LA rd, label</code></td>
-  <td>
-    Computes the address of <code>label</code> at runtime using
-    <code>LUI + ADDI</code> with correct sign-extension of the lower 12-bit offset.
-  </td>
+  <td>Computes the address of <code>label</code> using <code>LUI + ADDI</code> with sign-extension.</td>
 </tr>
 </table>
+
 <hr>
 
 <h2>Supported Instructions</h2>
 <p>Implements the <strong>RV32I base integer instruction set</strong> as defined by the RISC-V Foundation.</p>
-
 <p>For detailed bit fields and encodings, see the <a href="RISC-V Reference Card1.pdf" target="_blank"><strong>Official RISC-V Reference Card (PDF)</strong></a>.</p>
 
-<p>The following tables summarize the categories supported:</p>
-
 <ul>
-  <li><strong>Arithmetic & Logic:</strong> ADD, SUB, AND, OR, XOR, SLL, SRL, SRA, SLT, SLTU, plus immediate variants (ADDI, ANDI, etc.)</li>
-  <li><strong>Load/Store:</strong> LB/LBU, LH/LHU, LW, SB, SH, SW</li>
-  <li><strong>Branch/Jump:</strong> BEQ, BNE, BLT, BGE, BLTU, BGEU, JAL, JALR</li>
-  <li><strong>Upper-Immediate:</strong> LUI, AUIPC</li>
-  <li><strong>System:</strong> ECALL (halts program)</li>
+  <li><strong>Arithmetic & Logic:</strong> ADD, SUB, AND, OR, XOR, SLL, SRL, SRA, SLT, SLTU, plus immediate variants.</li>
+  <li><strong>Load/Store:</strong> LB/LBU, LH/LHU, LW, SB, SH, SW.</li>
+  <li><strong>Branch/Jump:</strong> BEQ, BNE, BLT, BGE, BLTU, BGEU, JAL, JALR.</li>
+  <li><strong>Upper-Immediate:</strong> LUI, AUIPC.</li>
+  <li><strong>System:</strong> ECALL (halts program).</li>
 </ul>
 
 <hr>
 
 <h2>Execution Model</h2>
 <ul>
-  <li>Each instruction advances the PC by +4 unless modified by a branch or jump.</li>
+  <li>Each instruction advances PC by +4 unless modified by branch/jump.</li>
   <li>Execution occurs step-by-step or continuously.</li>
   <li>Labels are resolved to byte addresses during load.</li>
   <li><strong>x0</strong> is always 0, enforced every step.</li>
